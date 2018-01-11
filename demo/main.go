@@ -105,7 +105,7 @@ func main() {
 	//Check an individual block has a valid signature
 	err = chain.ValidateSig(chain.Blocks[2].Signature, &chain.Blocks[2])
 	if err != nil {
-		fmt.Println(err)
+		log.Fatal(err)
 	}
 	fmt.Println("sig valid?", true)
 
