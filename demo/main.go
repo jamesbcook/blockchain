@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -90,12 +89,11 @@ func main() {
 		createBlock(input, stringOut[:len(stringOut)-1])
 	}
 
-	//Print block chain in JSON format
-	b, err := json.MarshalIndent(chain.Blocks, "", "    ")
+	//Write the current chain to a log file
+	err := chain.Write("blockchain.log")
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println(string(b))
 
 	//Check an individual block has a valid hash
 	valid, err := chain.ValidateHash(chain.Blocks[2].Hash, &chain.Blocks[2])

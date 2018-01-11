@@ -53,7 +53,7 @@ type Keys struct {
 }
 
 //Generate a RSA key pair for block signing
-func (chain *Chain) keyGen() {
+func (chain *Chain) setKeys() {
 	keys, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		log.Fatal(err)
@@ -87,7 +87,7 @@ func New(difficulty int) *Chain {
 	block := &Block{}
 	chain := &Chain{}
 	chain.Difficulty = difficulty
-	chain.keyGen()
+	chain.setKeys()
 	block.Version = 0.1
 	block.TimeStamp = time.Now().Unix()
 	block.Command = "Genesis Command " + hex.EncodeToString(getRandomBytes(64))
