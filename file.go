@@ -6,7 +6,7 @@ import (
 )
 
 //Load blockchain from a file
-func (chain *Chain) Load(file string) (*Chain, error) {
+func Load(file string) (*Chain, error) {
 	oldChain := &Chain{}
 	content, err := ioutil.ReadFile(file)
 	if err != nil {
