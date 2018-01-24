@@ -3,10 +3,11 @@ package blockchain
 import (
 	"encoding/hex"
 	"sync"
+	"time"
 )
 
 const (
-	threads = 12
+	threads = 6
 )
 
 //Mine a block
@@ -17,10 +18,13 @@ func (chain *Chain) Mine(block *Block) {
 	}
 	dataChannel := make(chan foundData, threads)
 	nonceChannel := make(chan uint64, threads*2)
-	doneChannel := make(chan bool, threads)
+	doneChannel := make(chan bool, threads*2)
 	var wg sync.WaitGroup
 	var nonce uint64
 	found := false
+	block.Version = 0.1
+	block.TimeStamp = time.Now().Unix()
+	block.Target = hex.EncodeToString(chain.difficulty.targetBits)
 	data := chain.blockToBytes(block)
 	for x := 0; x < threads*2; x++ {
 		nonceChannel <- nonce

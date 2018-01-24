@@ -52,7 +52,7 @@ func main() {
 	chainDone := make(chan bool, 1)
 	chain := &blockchain.Chain{}
 	go func() {
-		chain = blockchain.New(3)
+		chain = blockchain.New()
 		chainDone <- true
 	}()
 	printSpinner(chainDone)

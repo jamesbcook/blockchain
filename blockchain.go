@@ -33,6 +33,7 @@ type Block struct {
 	Command      string  `json:"command"`
 	Results      string  `json:"results"`
 	TimeStamp    int64   `json:"time_stamp"`
+	Target       string  `json:"target"`
 	Nonce        uint64  `json:"nonce"`
 	PreviousHash string  `json:"previous_hash"`
 	Signature    string  `json:"signature"`
@@ -41,9 +42,9 @@ type Block struct {
 
 //Chain of blocks
 type Chain struct {
-	Blocks     []Block `json:"blocks"`
-	Difficulty int
+	Blocks []Block `json:"blocks"`
 	Keys
+	*difficulty
 }
 
 //Keys for signing and validating blocks
@@ -83,10 +84,11 @@ func (chain *Chain) ExportPEMKey(key rsa.PublicKey) []byte {
 }
 
 //New block chain
-func New(difficulty int) *Chain {
+func New() *Chain {
 	block := &Block{}
 	chain := &Chain{}
-	chain.Difficulty = difficulty
+	chain.difficulty = initializeTarget()
+	chain.difficulty.prvTime = time.Now().Unix()
 	chain.setKeys()
 	block.Version = 0.1
 	block.TimeStamp = time.Now().Unix()
@@ -105,6 +107,7 @@ func New(difficulty int) *Chain {
 //Add block to the chain
 func (chain *Chain) Add(block *Block) {
 	chain.Blocks = append(chain.Blocks, *block)
+	chain.difficulty.calcMineTime(block.TimeStamp)
 }
 
 //Create a sha512 hash of a pasted in byte array
@@ -140,6 +143,7 @@ func (chain *Chain) blockToBytes(block *Block) []byte {
 	buf := make([]byte, binary.MaxVarintLen64)
 	binary.PutVarint(buf, block.TimeStamp)
 	data = append(data, buf...)
+	data = append(data, []byte(block.Target)...)
 	h := sha512.New()
 	h.Write(data)
 	hd := h.Sum(nil)

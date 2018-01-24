@@ -29,16 +29,11 @@ func (chain *Chain) ValidateHash(hash string, block *Block) (bool, error) {
 
 //Validate the hash meets the required difficulty
 func (chain *Chain) validHash(data []byte) bool {
-	match := 0
-	for i := 0; i < chain.Difficulty; i++ {
-		if data[i] != 0 {
-			break
-		} else {
-			match++
-		}
-		if match == chain.Difficulty {
-			return true
-		}
+	switch bytes.Compare(data, chain.difficulty.target) {
+	case -1:
+		return true
+	case 1:
+		return false
 	}
 	return false
 }
@@ -59,6 +54,7 @@ func (chain *Chain) ValidateSig(sig string, block *Block) error {
 	buf := make([]byte, binary.MaxVarintLen64)
 	binary.PutVarint(buf, block.TimeStamp)
 	data = append(data, buf...)
+	data = append(data, []byte(block.Target)...)
 	h := sha512.New()
 	h.Write(data)
 	decodedSig, err := hex.DecodeString(sig)
