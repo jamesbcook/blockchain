@@ -2,21 +2,24 @@ package blockchain
 
 import (
 	"bytes"
-	"crypto"
-	"crypto/rsa"
-	"crypto/sha512"
-	"encoding/binary"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/sha256"
 	"encoding/hex"
-	"math"
+	"errors"
+	"log"
+	"math/big"
 )
 
 //ValidateHash of block
 func (chain *Chain) ValidateHash(hash string, block *Block) (bool, error) {
-	data := chain.blockToBytes(block)
-	nonceBytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(nonceBytes, block.Nonce)
-	data = append(data, nonceBytes...)
-	res := createHash(data)
+	data := blockToBytes(block)
+	sigBytes, err := hex.DecodeString(block.Signature)
+	if err != nil {
+		log.Fatal(err)
+	}
+	data = append(data, sigBytes...)
+	res := hashBlock(data, block.Nonce)
 	decodeHash, err := hex.DecodeString(hash)
 	if err != nil {
 		return false, err
@@ -40,26 +43,26 @@ func (chain *Chain) validHash(data []byte) bool {
 
 //ValidateSig of block
 func (chain *Chain) ValidateSig(sig string, block *Block) error {
-	var data []byte
-	var floatBytes [4]byte
-	binary.BigEndian.PutUint32(floatBytes[:], math.Float32bits(block.Version))
-	data = append(data, floatBytes[:]...)
-	data = append(data, []byte(block.Command)...)
-	data = append(data, []byte(block.Results)...)
-	hashBytes, err := hex.DecodeString(block.PreviousHash)
-	if err != nil {
-		return err
-	}
-	data = append(data, hashBytes...)
-	buf := make([]byte, binary.MaxVarintLen64)
-	binary.PutVarint(buf, block.TimeStamp)
-	data = append(data, buf...)
-	data = append(data, []byte(block.Target)...)
-	h := sha512.New()
+	data := blockToBytes(block)
+	h := sha256.New()
 	h.Write(data)
 	decodedSig, err := hex.DecodeString(sig)
 	if err != nil {
 		return err
 	}
-	return rsa.VerifyPKCS1v15(&chain.Keys.Public, crypto.SHA512, h.Sum(nil), decodedSig)
+	r := big.Int{}
+	s := big.Int{}
+	sigLen := len(decodedSig)
+	r.SetBytes(decodedSig[:(sigLen / 2)])
+	s.SetBytes(decodedSig[(sigLen / 2):])
+	x := big.Int{}
+	y := big.Int{}
+	keyLen := len(chain.Keys.Public)
+	x.SetBytes(chain.Keys.Public[:(keyLen / 2)])
+	y.SetBytes(chain.Keys.Public[(keyLen / 2):])
+	rawPublic := ecdsa.PublicKey{Curve: elliptic.P256(), X: &x, Y: &y}
+	if ecdsa.Verify(&rawPublic, h.Sum(nil), &r, &s) == false {
+		return errors.New("Sig doesn't match")
+	}
+	return nil
 }

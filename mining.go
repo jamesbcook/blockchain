@@ -1,14 +1,22 @@
 package blockchain
 
 import (
+	"context"
 	"encoding/hex"
+	"math"
+	"math/rand"
+	"runtime"
 	"sync"
 	"time"
 )
 
-const (
-	threads = 6
+var (
+	threads = runtime.NumCPU()
 )
+
+func init() {
+	rand.Seed(time.Now().UTC().UnixNano())
+}
 
 //Mine a block
 func (chain *Chain) Mine(block *Block) {
@@ -16,52 +24,43 @@ func (chain *Chain) Mine(block *Block) {
 		nonce uint64
 		hash  string
 	}
-	dataChannel := make(chan foundData, threads)
-	nonceChannel := make(chan uint64, threads*2)
-	doneChannel := make(chan bool, threads*2)
-	var wg sync.WaitGroup
-	var nonce uint64
-	found := false
+	dataChannel := make(chan foundData, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	wg := sync.WaitGroup{}
 	block.Version = 0.1
 	block.TimeStamp = time.Now().Unix()
 	block.Target = hex.EncodeToString(chain.difficulty.targetBits)
-	data := chain.blockToBytes(block)
-	for x := 0; x < threads*2; x++ {
-		nonceChannel <- nonce
-		nonce++
-	}
+	data := blockToBytes(block)
+	sig := chain.signData(data)
+	data = append(data, sig...)
+	block.Signature = hex.EncodeToString(sig)
 	for x := 0; x < threads; x++ {
 		wg.Add(1)
-		go func() {
+		nonce := rand.Int63()
+		go func(ctx context.Context, wg *sync.WaitGroup, nonce uint64) {
+			defer wg.Done()
 			for {
-				tmpNonce := <-nonceChannel
-				res := hashBlock(data, tmpNonce)
-				if chain.validHash(res) && found == false {
-					found = true
-					dataChannel <- foundData{nonce: tmpNonce,
+				res := hashBlock(data, nonce)
+				if chain.validHash(res) {
+					dataChannel <- foundData{nonce: nonce,
 						hash: hex.EncodeToString(res)}
-					for i := 0; i < threads; i++ {
-						doneChannel <- true
-					}
 				}
 				select {
-				case f, ok := <-doneChannel:
-					if ok && f {
-						wg.Done()
-						return
-					}
+				case <-ctx.Done():
+					return
 				default:
 					nonce++
-					nonceChannel <- nonce
+					if nonce >= math.MaxUint64 {
+						nonce = 0
+					}
 				}
 			}
-		}()
+		}(ctx, &wg, uint64(nonce))
 	}
-	wg.Wait()
 	hashedBlock := <-dataChannel
 	block.Nonce = hashedBlock.nonce
 	block.Hash = hashedBlock.hash
-	close(dataChannel)
-	close(doneChannel)
-	close(nonceChannel)
+	cancel()
+	wg.Wait()
 }

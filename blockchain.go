@@ -1,14 +1,16 @@
 package blockchain
 
 import (
-	"crypto"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/sha512"
+	"crypto/sha256"
 	"encoding/asn1"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/pem"
+	"fmt"
 	"log"
 	"math"
 	"time"
@@ -45,22 +47,43 @@ type Chain struct {
 	Blocks []Block `json:"blocks"`
 	Keys
 	*difficulty
+	logger
+}
+
+type logInput func(input interface{})
+
+type logger struct {
+	Debug logInput
+}
+
+func logSetup(kind uint8) logInput {
+	var debug bool
+	switch kind {
+	case 0x00:
+		debug = true
+	case 0x01:
+	}
+	return func(input interface{}) {
+		if debug {
+			fmt.Printf("%v\n", input)
+		}
+	}
 }
 
 //Keys for signing and validating blocks
 type Keys struct {
-	Private *rsa.PrivateKey
-	Public  rsa.PublicKey
+	Secret *ecdsa.PrivateKey
+	Public []byte
 }
 
-//Generate a RSA key pair for block signing
 func (chain *Chain) setKeys() {
-	keys, err := rsa.GenerateKey(rand.Reader, 2048)
+	private, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		log.Fatal(err)
 	}
-	chain.Keys.Private = keys
-	chain.Keys.Public = keys.PublicKey
+	pubKey := append(private.PublicKey.X.Bytes(), private.PublicKey.Y.Bytes()...)
+	chain.Keys.Secret = private
+	chain.Keys.Public = pubKey
 }
 
 //Generate random bytes for the Gensis block
@@ -112,7 +135,7 @@ func (chain *Chain) Add(block *Block) {
 
 //Create a sha512 hash of a pasted in byte array
 func createHash(data []byte) []byte {
-	hash := sha512.New()
+	hash := sha256.New()
 	hash.Write(data)
 	return hash.Sum(nil)
 }
@@ -128,7 +151,7 @@ func hashBlock(data []byte, nonce uint64) []byte {
 }
 
 //Take a block object and turn the fields into a byte array
-func (chain *Chain) blockToBytes(block *Block) []byte {
+func blockToBytes(block *Block) []byte {
 	var data []byte
 	var floatBytes [4]byte
 	binary.BigEndian.PutUint32(floatBytes[:], math.Float32bits(block.Version))
@@ -144,14 +167,16 @@ func (chain *Chain) blockToBytes(block *Block) []byte {
 	binary.PutVarint(buf, block.TimeStamp)
 	data = append(data, buf...)
 	data = append(data, []byte(block.Target)...)
-	h := sha512.New()
+	return data
+}
+
+func (chain *Chain) signData(data []byte) []byte {
+	h := sha256.New()
 	h.Write(data)
 	hd := h.Sum(nil)
-	signedData, err := chain.Keys.Private.Sign(rand.Reader, hd, crypto.SHA512)
+	r, s, err := ecdsa.Sign(rand.Reader, chain.Keys.Secret, hd)
 	if err != nil {
 		log.Fatal(err)
 	}
-	data = append(data, signedData...)
-	block.Signature = hex.EncodeToString(signedData)
-	return data
+	return append(r.Bytes(), s.Bytes()...)
 }

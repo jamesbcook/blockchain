@@ -124,8 +124,6 @@ func main() {
 
 func createBlock(command, res string) {
 	block := &blockchain.Block{}
-	block.Version = 0.1
-	block.TimeStamp = time.Now().Unix()
 	block.Command = command
 	block.Results = res
 	work <- *block
